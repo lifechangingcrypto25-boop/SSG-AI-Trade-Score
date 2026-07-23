@@ -1,9 +1,9 @@
 //@version=6
-indicator("SSG AI Trade Score v1.1", overlay=true)
+indicator("SSG AI Trade Score v1.2", overlay=true)
 
 //====================================================
 // SSG AI TRADE SCORE
-// Version : 1.1
+// Version : 1.2
 // Author  : Eugene + ChatGPT
 //
 // v1.0
@@ -18,6 +18,11 @@ indicator("SSG AI Trade Score v1.1", overlay=true)
 // ✓ RSI Engine
 // ✓ Momentum Score
 // ✓ Total Score
+//
+// v1.2
+// ✓ Bollinger Bands Engine
+// ✓ Bollinger Score
+// ✓ Updated Momentum & Total Score
 //====================================================
 
 //==============================
@@ -27,6 +32,8 @@ ema20Length = input.int(20, "EMA 20", minval=1)
 ema50Length = input.int(50, "EMA 50", minval=1)
 ema100Length = input.int(100, "EMA 100", minval=1)
 rsiLength = input.int(14, "RSI Length", minval=1)
+bbLength = input.int(20, "BB Length", minval=1)
+bbMultiplier = input.float(2.0, "BB Multiplier", minval=0.1, step=0.1)
 
 //==============================
 // EMA ENGINE
@@ -81,8 +88,40 @@ else if rsi >= 65 and rsi <= 70
 else
     rsiScore := 0
 
-momentumScore = rsiScore
-totalScore = trendScore + momentumScore
+//==============================
+// BOLLINGER BANDS ENGINE
+//==============================
+[basis, upperBand, lowerBand] = ta.bb(close, bbLength, bbMultiplier)
+
+// Plot Bollinger Bands
+plot(basis, title="BB Basis", color=color.blue, linewidth=1)
+plot(upperBand, title="BB Upper", color=color.new(color.blue, 30), linewidth=1)
+plot(lowerBand, title="BB Lower", color=color.new(color.blue, 30), linewidth=1)
+
+bollingerScore = 0
+
+prevOutsideUpper = close[1] > upperBand[1]
+prevOutsideLower = close[1] < lowerBand[1]
+closesBackInside = close >= lowerBand and close <= upperBand
+reentryFromUpper = prevOutsideUpper and closesBackInside
+reentryFromLower = prevOutsideLower and closesBackInside
+closeAboveUpper = close > upperBand
+closeBelowLower = close < lowerBand
+touchUpper = high >= upperBand and close <= upperBand
+touchLower = low <= lowerBand and close >= lowerBand
+
+if reentryFromUpper or reentryFromLower
+    bollingerScore := 15
+else if closeAboveUpper or closeBelowLower
+    bollingerScore := 10
+else if touchUpper or touchLower
+    bollingerScore := 5
+else
+    bollingerScore := 0
+
+momentumScore = rsiScore + bollingerScore
+entryScore = 0
+totalScore = trendScore + momentumScore + entryScore
 
 //==============================
 // STATUS
@@ -98,7 +137,7 @@ if trendScore <= 10
 //==============================
 // DASHBOARD
 //==============================
-var table dash = table.new(position.top_right, 2, 7, border_width = 1)
+var table dash = table.new(position.top_right, 2, 8, border_width = 1)
 
 if barstate.islast
 
@@ -108,7 +147,7 @@ if barstate.islast
      text_color=color.white)
 
     table.cell(dash,1,0,
-     "v1.1",
+     "v1.2",
      bgcolor=color.rgb(25,25,112),
      text_color=color.white)
 
@@ -143,22 +182,32 @@ if barstate.islast
      text_color=color.orange)
 
     table.cell(dash,0,4,
-     "Entry",
+     "Bollinger",
      bgcolor=color.rgb(45,45,45),
      text_color=color.white)
 
     table.cell(dash,1,4,
-     "0 / 30",
+     str.tostring(bollingerScore)+" / 15",
      bgcolor=color.rgb(45,45,45),
-     text_color=color.yellow)
+     text_color=color.orange)
 
     table.cell(dash,0,5,
-     "TOTAL",
+     "Entry",
      bgcolor=color.rgb(45,45,45),
      text_color=color.white)
 
     table.cell(dash,1,5,
-     str.tostring(totalScore)+" / 70",
+     str.tostring(entryScore)+" / 30",
+     bgcolor=color.rgb(45,45,45),
+     text_color=color.yellow)
+
+    table.cell(dash,0,6,
+     "TOTAL",
+     bgcolor=color.rgb(45,45,45),
+     text_color=color.white)
+
+    table.cell(dash,1,6,
+     str.tostring(totalScore)+" / 100",
      bgcolor=color.rgb(45,45,45),
      text_color=color.lime)
 
@@ -167,12 +216,12 @@ if barstate.islast
          status == "BEARISH" ? color.red :
          color.orange
 
-    table.cell(dash,0,6,
+    table.cell(dash,0,7,
      "STATUS",
      bgcolor=statusColor,
      text_color=color.white)
 
-    table.cell(dash,1,6,
+    table.cell(dash,1,7,
      status,
      bgcolor=statusColor,
      text_color=color.white)
