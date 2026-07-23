@@ -1,0 +1,178 @@
+//@version=6
+indicator("SSG AI Trade Score v1.1", overlay=true)
+
+//====================================================
+// SSG AI TRADE SCORE
+// Version : 1.1
+// Author  : Eugene + ChatGPT
+//
+// v1.0
+// ✓ EMA Engine
+// ✓ Trend Score
+// ✓ Dashboard
+// ✗ RSI
+// ✗ Bollinger Bands
+// ✗ Alerts
+//
+// v1.1
+// ✓ RSI Engine
+// ✓ Momentum Score
+// ✓ Total Score
+//====================================================
+
+//==============================
+// INPUTS
+//==============================
+ema20Length = input.int(20, "EMA 20", minval=1)
+ema50Length = input.int(50, "EMA 50", minval=1)
+ema100Length = input.int(100, "EMA 100", minval=1)
+rsiLength = input.int(14, "RSI Length", minval=1)
+
+//==============================
+// EMA ENGINE
+//==============================
+ema20 = ta.ema(close, ema20Length)
+ema50 = ta.ema(close, ema50Length)
+ema100 = ta.ema(close, ema100Length)
+
+// Plot EMA's
+plot(ema20, title="EMA 20", color=color.green, linewidth=2)
+plot(ema50, title="EMA 50", color=color.orange, linewidth=2)
+plot(ema100, title="EMA 100", color=color.red, linewidth=2)
+
+//==============================
+// TREND SCORE
+//==============================
+trendScore = 0
+
+// EMA20 boven EMA50
+if ema20 > ema50
+    trendScore += 10
+
+// EMA50 boven EMA100
+if ema50 > ema100
+    trendScore += 10
+
+// Prijs boven EMA20
+if close > ema20
+    trendScore += 10
+
+// EMA20 stijgend
+if ema20 > ema20[1]
+    trendScore += 10
+
+//==============================
+// RSI ENGINE
+//==============================
+rsi = ta.rsi(close, rsiLength)
+
+rsiScore = 0
+
+if rsi < 30
+    rsiScore := 0
+else if rsi >= 30 and rsi < 40
+    rsiScore := 5
+else if rsi >= 40 and rsi < 50
+    rsiScore := 10
+else if rsi >= 50 and rsi < 65
+    rsiScore := 15
+else if rsi >= 65 and rsi <= 70
+    rsiScore := 10
+else
+    rsiScore := 0
+
+momentumScore = rsiScore
+totalScore = trendScore + momentumScore
+
+//==============================
+// STATUS
+//==============================
+status = "NEUTRAL"
+
+if trendScore >= 30
+    status := "BULLISH"
+
+if trendScore <= 10
+    status := "BEARISH"
+
+//==============================
+// DASHBOARD
+//==============================
+var table dash = table.new(position.top_right, 2, 7, border_width = 1)
+
+if barstate.islast
+
+    table.cell(dash,0,0,
+     "SSG AI TRADE SCORE",
+     bgcolor=color.rgb(25,25,112),
+     text_color=color.white)
+
+    table.cell(dash,1,0,
+     "v1.1",
+     bgcolor=color.rgb(25,25,112),
+     text_color=color.white)
+
+    table.cell(dash,0,1,
+     "Trend Score",
+     bgcolor=color.rgb(45,45,45),
+     text_color=color.white)
+
+    table.cell(dash,1,1,
+     str.tostring(trendScore)+" / 40",
+     bgcolor=color.rgb(45,45,45),
+     text_color=color.lime)
+
+    table.cell(dash,0,2,
+     "Momentum",
+     bgcolor=color.rgb(45,45,45),
+     text_color=color.white)
+
+    table.cell(dash,1,2,
+     str.tostring(momentumScore)+" / 30",
+     bgcolor=color.rgb(45,45,45),
+     text_color=color.orange)
+
+    table.cell(dash,0,3,
+     "RSI",
+     bgcolor=color.rgb(45,45,45),
+     text_color=color.white)
+
+    table.cell(dash,1,3,
+     str.tostring(rsiScore)+" / 15",
+     bgcolor=color.rgb(45,45,45),
+     text_color=color.orange)
+
+    table.cell(dash,0,4,
+     "Entry",
+     bgcolor=color.rgb(45,45,45),
+     text_color=color.white)
+
+    table.cell(dash,1,4,
+     "0 / 30",
+     bgcolor=color.rgb(45,45,45),
+     text_color=color.yellow)
+
+    table.cell(dash,0,5,
+     "TOTAL",
+     bgcolor=color.rgb(45,45,45),
+     text_color=color.white)
+
+    table.cell(dash,1,5,
+     str.tostring(totalScore)+" / 70",
+     bgcolor=color.rgb(45,45,45),
+     text_color=color.lime)
+
+    statusColor =
+         status == "BULLISH" ? color.green :
+         status == "BEARISH" ? color.red :
+         color.orange
+
+    table.cell(dash,0,6,
+     "STATUS",
+     bgcolor=statusColor,
+     text_color=color.white)
+
+    table.cell(dash,1,6,
+     status,
+     bgcolor=statusColor,
+     text_color=color.white)
