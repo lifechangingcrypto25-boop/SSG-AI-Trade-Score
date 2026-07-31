@@ -154,11 +154,11 @@ bearishBOS = not na(lastSwingLow) and close < lastSwingLow and close[1] >= lastS
 
 if bullishBOS
     bullishBroken := true
-    label.new(bar_index, 0, "BOS ↑", color=color.green, style=label.style_label_up, textcolor=color.white, yloc=yloc.belowbar)
+    label.new(bar_index, low, "BOS ↑", color=color.green, style=label.style_label_up, textcolor=color.white, yloc=yloc.belowbar)
 
 if bearishBOS
     bearishBroken := true
-    label.new(bar_index, 0, "BOS ↓", color=color.red, style=label.style_label_down, textcolor=color.white, yloc=yloc.abovebar)
+    label.new(bar_index, high, "BOS ↓", color=color.red, style=label.style_label_down, textcolor=color.white, yloc=yloc.abovebar)
 
 plotshape(not na(swingHigh), title="Swing High", style=shape.circle, location=location.abovebar, offset=-pivotRight, color=color.green, size=size.tiny)
 plotshape(not na(swingLow), title="Swing Low", style=shape.circle, location=location.belowbar, offset=-pivotRight, color=color.red, size=size.tiny)
