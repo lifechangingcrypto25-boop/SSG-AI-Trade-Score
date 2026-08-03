@@ -28,6 +28,9 @@ indicator("SSG AI Trade Score v1.3", overlay=true)
 // ✓ Break Of Structure Engine
 // ✓ Swing High / Swing Low Detection
 // ✓ BOS Labels
+// ✓ Initial Retest Detection Engine (Ticket #004B-A)
+// ✓ Retest Confirmation Filter (Ticket #004B-B)
+// ✓ Entry Score Engine v1 (Ticket #004B-C)
 //====================================================
 
 //==============================
@@ -41,6 +44,8 @@ bbLength = input.int(20, "BB Length", minval=1)
 bbMultiplier = input.float(2.0, "BB Multiplier", minval=0.1, step=0.1)
 pivotLeft = input.int(5, "Pivot Left", minval=1)
 pivotRight = input.int(5, "Pivot Right", minval=1)
+retestTolerance = input.float(0.1, "Retest Tolerance %", minval=0.01, step=0.01)
+entryValidityBars = input.int(10, "Entry Setup Validity Bars", minval=1)
 
 //==============================
 // EMA ENGINE
@@ -127,8 +132,6 @@ else
     bollingerScore := 0
 
 momentumScore = rsiScore + bollingerScore
-entryScore = 0
-totalScore = trendScore + momentumScore + entryScore
 
 //==============================
 // BREAK OF STRUCTURE ENGINE
@@ -162,6 +165,78 @@ if bearishBOS
 
 plotshape(not na(swingHigh), title="Swing High", style=shape.circle, location=location.abovebar, offset=-pivotRight, color=color.red, size=size.tiny)
 plotshape(not na(swingLow), title="Swing Low", style=shape.circle, location=location.belowbar, offset=-pivotRight, color=color.green, size=size.tiny)
+
+//==============================
+// RETEST DETECTION ENGINE
+//==============================
+var float bullishBOSLevel = na
+var float bearishBOSLevel = na
+var int bullishBOSBar = na
+var int bearishBOSBar = na
+var bool bullishRetestUsed = false
+var bool bearishRetestUsed = false
+
+if bullishBOS
+    bullishBOSLevel := lastSwingHigh
+    bullishBOSBar := bar_index
+    bullishRetestUsed := false
+
+if bearishBOS
+    bearishBOSLevel := lastSwingLow
+    bearishBOSBar := bar_index
+    bearishRetestUsed := false
+
+bullishRetestTol = not na(bullishBOSLevel) ? bullishBOSLevel * retestTolerance / 100 : na
+bearishRetestTol = not na(bearishBOSLevel) ? bearishBOSLevel * retestTolerance / 100 : na
+
+bullishRetest = not na(bullishBOSLevel) and not bullishRetestUsed and bar_index > bullishBOSBar and math.abs(low - bullishBOSLevel) <= bullishRetestTol and close > bullishBOSLevel
+bearishRetest = not na(bearishBOSLevel) and not bearishRetestUsed and bar_index > bearishBOSBar and math.abs(high - bearishBOSLevel) <= bearishRetestTol and close < bearishBOSLevel
+
+if bullishRetest
+    bullishRetestUsed := true
+    label.new(bar_index, low, "RETEST ↑", color=color.green, style=label.style_label_up, textcolor=color.white, yloc=yloc.belowbar)
+
+if bearishRetest
+    bearishRetestUsed := true
+    label.new(bar_index, high, "RETEST ↓", color=color.red, style=label.style_label_down, textcolor=color.white, yloc=yloc.abovebar)
+
+//==============================
+// ENTRY SCORE ENGINE
+//==============================
+var int setupDirection = 0
+var int setupBar = na
+var bool setupRetestConfirmed = false
+var int entryScore = 0
+
+if bullishBOS
+    setupDirection := 1
+    setupBar := bar_index
+    setupRetestConfirmed := false
+
+if bearishBOS
+    setupDirection := -1
+    setupBar := bar_index
+    setupRetestConfirmed := false
+
+setupActive = setupDirection != 0 and not na(setupBar) and bar_index - setupBar < entryValidityBars
+
+if setupActive
+    if setupDirection == 1
+        if bullishRetest
+            setupRetestConfirmed := true
+        entryScore := setupRetestConfirmed ? (ema20 > ema50 and ema50 > ema100 ? 30 : 20) : 10
+    else if setupDirection == -1
+        if bearishRetest
+            setupRetestConfirmed := true
+        entryScore := setupRetestConfirmed ? (ema20 < ema50 and ema50 < ema100 ? 30 : 20) : 10
+else
+    entryScore := 0
+    if setupDirection != 0 and not na(setupBar) and bar_index - setupBar >= entryValidityBars
+        setupDirection := 0
+        setupBar := na
+        setupRetestConfirmed := false
+
+totalScore = trendScore + momentumScore + entryScore
 
 //==============================
 // STATUS
