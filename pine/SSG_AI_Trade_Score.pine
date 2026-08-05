@@ -31,6 +31,7 @@ indicator("SSG AI Trade Score v1.3", overlay=true)
 // ✓ Initial Retest Detection Engine (Ticket #004B-A)
 // ✓ Retest Confirmation Filter (Ticket #004B-B)
 // ✓ Entry Score Engine v1 (Ticket #004B-C)
+// ✓ Directional Entry Display (Ticket #004C-A)
 //====================================================
 
 //==============================
@@ -64,19 +65,15 @@ plot(ema100, title="EMA 100", color=color.red, linewidth=2)
 //==============================
 trendScore = 0
 
-// EMA20 boven EMA50
 if ema20 > ema50
     trendScore += 10
 
-// EMA50 boven EMA100
 if ema50 > ema100
     trendScore += 10
 
-// Prijs boven EMA20
 if close > ema20
     trendScore += 10
 
-// EMA20 stijgend
 if ema20 > ema20[1]
     trendScore += 10
 
@@ -105,7 +102,6 @@ else
 //==============================
 [basis, upperBand, lowerBand] = ta.bb(close, bbLength, bbMultiplier)
 
-// Plot Bollinger Bands
 plot(basis, title="BB Basis", color=color.blue, linewidth=1)
 plot(upperBand, title="BB Upper", color=color.new(color.blue, 30), linewidth=1)
 plot(lowerBand, title="BB Lower", color=color.new(color.blue, 30), linewidth=1)
@@ -201,42 +197,120 @@ if bearishRetest
     label.new(bar_index, high, "RETEST ↓", color=color.red, style=label.style_label_down, textcolor=color.white, yloc=yloc.abovebar)
 
 //==============================
+//==============================
 // ENTRY SCORE ENGINE
+// Ticket #004C-B — Directional Entry Confirmation
 //==============================
 var int setupDirection = 0
 var int setupBar = na
 var bool setupRetestConfirmed = false
 var int entryScore = 0
 
+// Nieuwe bullish setup na bullish BOS
 if bullishBOS
     setupDirection := 1
     setupBar := bar_index
     setupRetestConfirmed := false
 
+// Nieuwe bearish setup na bearish BOS
 if bearishBOS
     setupDirection := -1
     setupBar := bar_index
     setupRetestConfirmed := false
 
+// Setup blijft tijdelijk geldig
 setupActive = setupDirection != 0 and not na(setupBar) and bar_index - setupBar < entryValidityBars
 
+// Directionele trendbevestiging
+bullishTrendConfirm =
+     close > ema20 and
+     ema20 > ema50 and
+     ema50 > ema100
+
+bearishTrendConfirm =
+     close < ema20 and
+     ema20 < ema50 and
+     ema50 < ema100
+
+// Directionele momentumbevestiging
+bullishMomentumConfirm =
+     rsi >= 50 and
+     momentumScore >= 10
+
+bearishMomentumConfirm =
+     rsi < 50 and
+     momentumScore >= 10
+
+// Entry score
 if setupActive
+
     if setupDirection == 1
+
         if bullishRetest
             setupRetestConfirmed := true
-        entryScore := setupRetestConfirmed ? (ema20 > ema50 and ema50 > ema100 ? 30 : 20) : 10
+
+        if setupRetestConfirmed and bullishTrendConfirm and bullishMomentumConfirm
+            entryScore := 30
+        else if setupRetestConfirmed
+            entryScore := 20
+        else
+            entryScore := 10
+
     else if setupDirection == -1
+
         if bearishRetest
             setupRetestConfirmed := true
-        entryScore := setupRetestConfirmed ? (ema20 < ema50 and ema50 < ema100 ? 30 : 20) : 10
+
+        if setupRetestConfirmed and bearishTrendConfirm and bearishMomentumConfirm
+            entryScore := 30
+        else if setupRetestConfirmed
+            entryScore := 20
+        else
+            entryScore := 10
+
 else
     entryScore := 0
+
     if setupDirection != 0 and not na(setupBar) and bar_index - setupBar >= entryValidityBars
         setupDirection := 0
         setupBar := na
         setupRetestConfirmed := false
 
 totalScore = trendScore + momentumScore + entryScore
+//==============================
+// ENTRY SIGNAL MARKER
+// Ticket #004C-B
+// Shows one marker when Entry Score
+// reaches 30/30 for the first time
+//==============================
+
+// Detect first candle where Entry Score reaches 30
+entry30Triggered = entryScore == 30 and entryScore[1] != 30
+
+// Determine direction of the confirmed entry
+bullishEntrySignal = entry30Triggered and setupDirection == 1
+bearishEntrySignal = entry30Triggered and setupDirection == -1
+
+// Plot one ENTRY marker
+if bullishEntrySignal
+    label.new(
+         bar_index,
+         low,
+         "ENTRY ↑",
+         color=color.lime,
+         style=label.style_label_up,
+         textcolor=color.white,
+         yloc=yloc.belowbar)
+
+if bearishEntrySignal
+    label.new(
+         bar_index,
+         high,
+         "ENTRY ↓",
+         color=color.red,
+         style=label.style_label_down,
+         textcolor=color.white,
+         yloc=yloc.abovebar)
 
 //==============================
 // STATUS
@@ -250,9 +324,23 @@ if trendScore <= 10
     status := "BEARISH"
 
 //==============================
+// DIRECTIONAL ENTRY DISPLAY
+// Ticket #004C-A
+//==============================
+string entryDirectionText = "Entry"
+color entryDirectionColor = color.yellow
+
+if setupActive and setupDirection == 1
+    entryDirectionText := "Entry ↑"
+    entryDirectionColor := color.lime
+else if setupActive and setupDirection == -1
+    entryDirectionText := "Entry ↓"
+    entryDirectionColor := color.red
+
+//==============================
 // DASHBOARD
 //==============================
-var table dash = table.new(position.top_right, 2, 8, border_width = 1)
+var table dash = table.new(position.top_right, 2, 8, border_width=1)
 
 if barstate.islast
 
@@ -307,14 +395,14 @@ if barstate.islast
      text_color=color.orange)
 
     table.cell(dash,0,5,
-     "Entry",
+     entryDirectionText,
      bgcolor=color.rgb(45,45,45),
      text_color=color.white)
 
     table.cell(dash,1,5,
      str.tostring(entryScore)+" / 30",
      bgcolor=color.rgb(45,45,45),
-     text_color=color.yellow)
+     text_color=entryDirectionColor)
 
     table.cell(dash,0,6,
      "TOTAL",
